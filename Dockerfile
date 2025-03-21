@@ -7,31 +7,38 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/home/appuser" \
-    --shell "/sbin/nologin" \
-    --uid "${UID}" \
-    appuser
+# ARG UID=10001
+# RUN adduser \
+#     --disabled-password \
+#     --gecos "" \
+#     --home "/home/appuser" \
+#     --shell "/sbin/nologin" \
+#     --uid "${UID}" \
+#     appuser
+
+# RUN mkdir -p /app/alembic/versions && \
+#     chown -R appuser:appuser /app/alembic && \
+#     chmod -R 755 /app/alembic
 
 RUN python -m pip install --upgrade pip && \
     pip install poetry
 
 COPY ./poetry.lock ./poetry.lock
 COPY ./pyproject.toml ./pyproject.toml
-# COPY ./alembic.ini ./alembic.ini
+COPY ./alembic.ini ./alembic.ini
 
 RUN poetry config virtualenvs.create false
 
 RUN poetry lock
 RUN poetry install --no-root --only main
 
-USER appuser
+# USER appuser
 
 COPY . .
+RUN ls -la /app/alembic
 
 EXPOSE 8000
 
-CMD ["poetry", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["poetry", "run", "alembic", "revision", "--autogenerate", "-m", "init"]
+
+# CMD ["poetry", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

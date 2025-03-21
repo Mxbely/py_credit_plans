@@ -1,14 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sesionmaker
-from backend.database import (
-    DATABASE_URL,
-    HOST_DB,
-    NAME_DB,
-    PASSWORD_DB,
-    PORT_DB,
-    SessionLocal,
-    USER_DB,
-)
+from sqlalchemy.orm import sessionmaker
+
 from dotenv import load_dotenv
 import os
 
@@ -20,12 +12,12 @@ USER_DB = os.getenv("POSTGRES_USER")
 HOST_DB = os.getenv("POSTGRES_HOST")
 PORT_DB = os.getenv("POSTGRES_PORT")
 
-DATABASE_URL = f"postgresql+psycopg2://{USER_DB}:{PASSWORD_DB}@{HOST_DB}/{NAME_DB}:{PORT_DB}"
+DATABASE_URL = f"postgresql+psycopg2://{USER_DB}:{PASSWORD_DB}@{HOST_DB}:{PORT_DB}/{NAME_DB}"
 
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 
-SessionLocal = sesionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
