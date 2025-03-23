@@ -5,13 +5,14 @@ services:
       context: .
     command: >
       sh -c "poetry run python auto_migrate.py &&
+              poetry run python upload_test_files.py &&
               poetry run uvicorn backend.main:app --host 0.0.0.0 --port 8000"
     ports:
       - 8000:8000
     volumes:
       - alembic_versions:/app/alembic/versions 
-    networks:
-      - credit_network
+    # networks:
+    #   - credit_network
     depends_on:
       db:
         condition: service_healthy
@@ -23,8 +24,8 @@ services:
       - .env
     expose:
       - 5432
-    networks:
-      - credit_network
+    # networks:
+    #   - credit_network
     healthcheck:
       test: [ "CMD", "pg_isready" ]
       interval: 10s
@@ -37,6 +38,6 @@ volumes:
 secrets:
   db-password:
     file: db/password.txt
-networks:
-  credit_network:
-    driver: bridge
+# networks:
+#   credit_network:
+#     driver: bridge

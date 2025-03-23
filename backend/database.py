@@ -1,10 +1,15 @@
+import logging
+import os
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from dotenv import load_dotenv
-import os
-
 load_dotenv()
+
+# Uncomment the following lines to see the SQL queries
+# logging.basicConfig()
+# logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 NAME_DB = os.getenv("POSTGRES_DB")
 PASSWORD_DB = os.getenv("POSTGRES_PASSWORD")
