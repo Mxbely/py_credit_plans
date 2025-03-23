@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
 from backend.models import Credit, Dictionary, Payment, Plan, User
+from backend.schemas import PlanResponseSchema, UserCreditResponseSchema
 
 router = APIRouter()
 
 
-@router.get("/user_credit/{user_id}")
+@router.get("/user_credit/{user_id}", response_model=UserCreditResponseSchema)
 def get_user_credit(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter_by(id=user_id).first()
     if not user:
@@ -24,9 +25,8 @@ def get_user_credit(user_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    lst = []
+    credit_list = []
     for credit in user_credits:
-        total_payment = sum(payment.sum for payment in credit.payments)
 
         if not credit.actual_return_date:
             body_payments = sum(
@@ -39,28 +39,27 @@ def get_user_credit(user_id: int, db: Session = Depends(get_db)):
                 for payment in credit.payments
                 if payment.payment_type.name == "відсотки"
             )
+            overdue_days = (
+                (datetime.date.today() - credit.return_date.date()).days
+                if datetime.date.today() > credit.return_date.date()
+                else 0
+            )
 
-            lst.append(
+            credit_list.append(
                 {
                     "issuance_date": credit.issuance_date,
                     "returned": False,
                     "return_date": credit.return_date,
-                    "overdue_days": (
-                        (
-                            datetime.date.today() - credit.return_date.date()
-                        ).days
-                        if datetime.date.today() > credit.return_date.date()
-                        else 0
-                    ),
+                    "overdue_days": overdue_days,
                     "body": credit.body,
                     "percent": credit.percent,
-                    "total_payment": total_payment,
                     "body_payments": body_payments,
                     "percent_payments": percent_payments,
                 }
             )
         else:
-            lst.append(
+            total_payment = sum(payment.sum for payment in credit.payments)
+            credit_list.append(
                 {
                     "issuance_date": credit.issuance_date,
                     "returned": True,
@@ -71,11 +70,12 @@ def get_user_credit(user_id: int, db: Session = Depends(get_db)):
                 }
             )
 
-    return lst
+    return credit_list
 
 
 @router.post(
     "/plans_insert",
+    response_model=PlanResponseSchema,
     description="Upload file in CSV format with similar stucture:<br>"
     "01.07.2023\t214000\tвидача<br>"
     "01.07.2023\t1179000\tзбір<br>"

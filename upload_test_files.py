@@ -56,7 +56,7 @@ def main():
             write_to_db(file, db)
             logger.info(f"End of upload {file}")
         else:
-            logger.info(f"{file} already exist")
+            logger.info(f"{file} already exist in db")
 
 
 if __name__ == "__main__":
