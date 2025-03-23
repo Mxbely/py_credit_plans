@@ -1,5 +1,9 @@
+import logging
 import subprocess
 import sys
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
+logger = logging.getLogger()
 
 
 def run_command(command):
@@ -10,7 +14,7 @@ def run_command(command):
 
 
 def upgrade_database():
-    print("Upgrading database...")
+    logger.info("Upgrading database...")
     run_command("poetry run alembic upgrade head")
 
 
@@ -19,7 +23,7 @@ if __name__ == "__main__":
         "poetry run alembic revision --autogenerate -m 'auto migration'"
     )
     if "No changes detected" in result.stdout:
-        print("No changes detected")
+        logger.info("No database changes detected")
     else:
-        print("Changes detected")
+        logger.info("Database changes detected")
     upgrade_database()
