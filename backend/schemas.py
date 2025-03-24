@@ -29,3 +29,14 @@ UserCreditResponseSchema = list[Union[ActiveCreditSchema, ClosedCreditSchema]]
 
 class PlanResponseSchema(BaseModel):
     message: str
+
+
+class PlanPerformanceSchema(BaseModel):
+    month: str
+    category: str
+    plan_amount: float
+    actual_amount: float
+    performance_percentage: float
+
+
+ListPlanPerformanceSchema = list[PlanPerformanceSchema]

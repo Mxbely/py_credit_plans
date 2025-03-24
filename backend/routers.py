@@ -2,13 +2,25 @@ import csv
 import datetime
 import io
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import extract, text
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
 from backend.models import Credit, Dictionary, Payment, Plan, User
-from backend.schemas import PlanResponseSchema, UserCreditResponseSchema
+from backend.schemas import (
+    ListPlanPerformanceSchema,
+    PlanResponseSchema,
+    UserCreditResponseSchema,
+)
 
 router = APIRouter()
 
@@ -18,11 +30,50 @@ router = APIRouter()
     response_model=UserCreditResponseSchema,
     summary="Get user credits",
     description="Method for retrieving information about a user's credits by their ID.",
+    responses={
+        200: {
+            "description": "Information about user credits.",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "issuance_date": "2023-01-01",
+                            "returned": False,
+                            "return_date": "2023-12-31",
+                            "overdue_days": 5,
+                            "body": 5000,
+                            "percent": 150,
+                            "body_payments": 1000,
+                            "percent_payments": 200,
+                        }
+                    ]
+                }
+            },
+        },
+        404: {
+            "description": "User not found",
+            "content": {
+                "application/json": {"example": {"detail": "User not found"}}
+            },
+        },
+        500: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "An error occurred while processing the request."
+                    }
+                }
+            },
+        },
+    },
 )
 def get_user_credit(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter_by(id=user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     user_credits = (
         db.query(Credit)
         .filter_by(user_id=user_id)
@@ -89,6 +140,36 @@ def get_user_credit(user_id: int, db: Session = Depends(get_db)):
     "1. Period (date in format DD.MM.YYYY)\n"
     "2. Summa (Number)\n"
     "3. Category (String,Category name).",
+    responses={
+        200: {
+            "description": "Plans successfully added.",
+            "content": {
+                "application/json": {
+                    "example": {"message": "Plans successfully added"}
+                }
+            },
+        },
+        400: {
+            "description": "Incorrect data in the file or a plan with such period and category already exists.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Plan with period 01.07.2023 and category 'видача' already exists."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "An error occurred while processing the file."
+                    }
+                }
+            },
+        },
+    },
 )
 def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
     reader = csv.reader(
@@ -112,13 +193,14 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
             if period.day != 1:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Period {period} must be the first day of the month",
                 )
 
             if not sum.isdigit():
                 raise HTTPException(
-                    status_code=400, detail=f"Sum must be number {sum}"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Sum must be number {sum}",
                 )
 
             if (
@@ -130,7 +212,7 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
                 .first()
             ):
                 raise HTTPException(
-                    status_code=400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Plan with period {period} and category {category_name} already exists",
                 )
             else:
@@ -143,7 +225,7 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
                 db.add(plan)
     except ValueError as e:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please input the correct document structure",
         )
     db.commit()
@@ -153,9 +235,55 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
 @router.get(
     "/plans_performance",
+    response_model=ListPlanPerformanceSchema,
     summary="Get plans performance",
     description="A method for obtaining information about "
     "the implementation of plans for a specific date.",
+    responses={
+        200: {
+            "description": "List of execution plans for a given date.",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "month": "2023-01",
+                            "category": "видача",
+                            "plan_amount": 100000,
+                            "actual_amount": 80000,
+                            "performance_percentage": 80.0,
+                        },
+                        {
+                            "month": "2023-01",
+                            "category": "збір",
+                            "plan_amount": 50000,
+                            "actual_amount": 45000,
+                            "performance_percentage": 90.0,
+                        },
+                    ]
+                }
+            },
+        },
+        400: {
+            "description": "The date was incorrectly transmitted or there are no plans for this date.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid date format or no plans found for this date."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "An error occurred while processing the request."
+                    }
+                }
+            },
+        },
+    },
 )
 def get_plans_performance(
     check_date: datetime.date = Query(
@@ -176,33 +304,41 @@ def get_plans_performance(
     )
 
     for plan in plans:
-
-        total_amount = None
-        if plan.category.name == "видача":
-            total_amount = sum(
-                c.body
-                for c in db.query(Credit)
-                .filter(
-                    extract("month", Credit.issuance_date) == check_date.month,
-                    extract("year", Credit.issuance_date) == check_date.year,
-                    extract("day", Credit.issuance_date) >= 1,
+        try:
+            total_amount = None
+            if plan.category.name == "видача":
+                total_amount = sum(
+                    c.body
+                    for c in db.query(Credit)
+                    .filter(
+                        extract("month", Credit.issuance_date)
+                        == check_date.month,
+                        extract("year", Credit.issuance_date)
+                        == check_date.year,
+                        extract("day", Credit.issuance_date) >= 1,
+                    )
+                    .all()
                 )
-                .all()
-            )
 
-        elif plan.category.name == "збір":
-            total_amount = sum(
-                p.sum
-                for p in db.query(Payment)
-                .filter(
-                    extract("month", Payment.payment_date) == check_date.month,
-                    extract("year", Payment.payment_date) == check_date.year,
-                    extract("day", Payment.payment_date) >= 1,
+            elif plan.category.name == "збір":
+                total_amount = sum(
+                    p.sum
+                    for p in db.query(Payment)
+                    .filter(
+                        extract("month", Payment.payment_date)
+                        == check_date.month,
+                        extract("year", Payment.payment_date)
+                        == check_date.year,
+                        extract("day", Payment.payment_date) >= 1,
+                    )
+                    .all()
                 )
-                .all()
+            performance = (total_amount / plan.sum) * 100 if plan.sum else 0
+        except TypeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Total amount must be number",
             )
-
-        performance = (total_amount / plan.sum) * 100 if plan.sum else 0
 
         results.append(
             {
