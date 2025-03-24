@@ -2,8 +2,8 @@ import csv
 import datetime
 import io
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy import extract, text
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
@@ -13,7 +13,12 @@ from backend.schemas import PlanResponseSchema, UserCreditResponseSchema
 router = APIRouter()
 
 
-@router.get("/user_credit/{user_id}", response_model=UserCreditResponseSchema)
+@router.get(
+    "/user_credit/{user_id}",
+    response_model=UserCreditResponseSchema,
+    summary="Get user credits",
+    description="Method for retrieving information about a user's credits by their ID.",
+)
 def get_user_credit(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter_by(id=user_id).first()
     if not user:
@@ -76,6 +81,7 @@ def get_user_credit(user_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/plans_insert",
     response_model=PlanResponseSchema,
+    summary="Add plans from a CSV file",
     description="Upload file in CSV format with similar stucture:<br>"
     "01.07.2023\t214000\tвидача<br>"
     "01.07.2023\t1179000\tзбір<br>"
@@ -98,40 +104,114 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
     )
     db.commit()
 
-    for row in reader:
-        period = datetime.datetime.strptime(row[0], "%d.%m.%Y").date()
-        category_name = row[2]
-        sum = row[1]
+    try:
+        for row in reader:
+            period = datetime.datetime.strptime(row[0], "%d.%m.%Y").date()
+            category_name = row[2]
+            sum = row[1]
 
-        if period.day != 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Period {period} must be the first day of the month",
-            )
+            if period.day != 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Period {period} must be the first day of the month",
+                )
 
-        if not sum.isdigit():
-            raise HTTPException(
-                status_code=400, detail=f"Sum must be number {sum}"
-            )
+            if not sum.isdigit():
+                raise HTTPException(
+                    status_code=400, detail=f"Sum must be number {sum}"
+                )
 
-        if (
-            db.query(Plan)
-            .join(Dictionary)
-            .filter(Plan.period == period, Dictionary.name == category_name)
-            .first()
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Plan with period {period} and category {category_name} already exists",
-            )
-        else:
-            category = [
-                category
-                for category in categories
-                if category.name == category_name
-            ][0]
-            plan = Plan(period=period, sum=sum, category_id=category.id)
-            db.add(plan)
+            if (
+                db.query(Plan)
+                .join(Dictionary)
+                .filter(
+                    Plan.period == period, Dictionary.name == category_name
+                )
+                .first()
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Plan with period {period} and category {category_name} already exists",
+                )
+            else:
+                category = [
+                    category
+                    for category in categories
+                    if category.name == category_name
+                ][0]
+                plan = Plan(period=period, sum=sum, category_id=category.id)
+                db.add(plan)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail="Please input the correct document structure",
+        )
     db.commit()
 
     return {"message": "Plans successfully added"}
+
+
+@router.get(
+    "/plans_performance",
+    summary="Get plans performance",
+    description="A method for obtaining information about "
+    "the implementation of plans for a specific date.",
+)
+def get_plans_performance(
+    check_date: datetime.date = Query(
+        description="Date for checking plan execution in YYYY-MM-DD format",
+    ),
+    db: Session = Depends(get_db),
+):
+    results = []
+    plans = (
+        db.query(Plan)
+        .join(Dictionary, Plan.category_id == Dictionary.id)
+        .options(joinedload(Plan.category))
+        .filter(
+            extract("month", Plan.period) == check_date.month,
+            extract("year", Plan.period) == check_date.year,
+        )
+        .all()
+    )
+
+    for plan in plans:
+
+        total_amount = None
+        if plan.category.name == "видача":
+            total_amount = sum(
+                c.body
+                for c in db.query(Credit)
+                .filter(
+                    extract("month", Credit.issuance_date) == check_date.month,
+                    extract("year", Credit.issuance_date) == check_date.year,
+                    extract("day", Credit.issuance_date) >= 1,
+                )
+                .all()
+            )
+
+        elif plan.category.name == "збір":
+            total_amount = sum(
+                p.sum
+                for p in db.query(Payment)
+                .filter(
+                    extract("month", Payment.payment_date) == check_date.month,
+                    extract("year", Payment.payment_date) == check_date.year,
+                    extract("day", Payment.payment_date) >= 1,
+                )
+                .all()
+            )
+
+        performance = (total_amount / plan.sum) * 100 if plan.sum else 0
+
+        results.append(
+            {
+                "month": plan.period.strftime("%Y-%m"),
+                "category": plan.category.name,
+                "plan_amount": plan.sum,
+                "actual_amount": total_amount,
+                "performance_percentage": round(performance, 2),
+            }
+        )
+
+    return results

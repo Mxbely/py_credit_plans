@@ -18,7 +18,7 @@ def upgrade_database():
     run_command("poetry run alembic upgrade head")
 
 
-if __name__ == "__main__":
+def main():
     result = run_command(
         "poetry run alembic revision --autogenerate -m 'auto migration'"
     )
@@ -27,3 +27,7 @@ if __name__ == "__main__":
     else:
         logger.info("Database changes detected")
     upgrade_database()
+
+
+if __name__ == "__main__":
+    main()
