@@ -1,0 +1,30 @@
+[project]
+name = "py-credit-plans"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Max",email = "mxbely98@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard] (>=0.115.11,<0.116.0)",
+    "uvicorn (>=0.34.0,<0.35.0)",
+    "black (>=25.1.0,<26.0.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "psycopg2-binary (>=2.9.10,<3.0.0)",
+    "alembic (>=1.15.1,<2.0.0)",
+    "isort (>=6.0.1,<7.0.0)",
+]
+
+
+[tool.isort]
+multi_line_output = 3
+force_grid_wrap = 0
+include_trailing_comma = true
+line_length = 88
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
